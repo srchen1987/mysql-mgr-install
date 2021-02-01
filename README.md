@@ -104,7 +104,7 @@ Mysql3的my.cnf
 user=mysql
 basedir=/usr/local/mysq8
 datadir=/usr/local/mysq8/data
-server_id=111
+server_id=112
 port=3306
 socket=/usr/local/mysq8/data/mysql.sock
 gtid-mode=on
