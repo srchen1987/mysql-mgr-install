@@ -1,7 +1,7 @@
 # 基于mgr搭建高可用方案
 
 ## mysql版本
-注意:这里采用的是mysql8.0.x  如果是 8.4.x或9.x请参考官方文档调整参数.
+注意:这里采用的是mysql8.4.x 如果是8.0.x或9.x请参考官方文档调整参数.
 
 例如:
 ```shell
@@ -91,7 +91,7 @@ skip-name-resolve
 #relay_log_info_repository=TABLE
 log_slave_updates=ON
 
-transaction_write_set_extraction=XXHASH64
+#transaction_write_set_extraction=XXHASH64
 loose-group_replication_bootstrap_group=OFF
 loose-group_replication_start_on_boot=OFF
 loose-group_replication_group_name="b0e3a840-0c38-4cb3-aefb-82f1a2b9b32d"
@@ -124,7 +124,7 @@ skip-name-resolve
 #relay_log_info_repository=TABLE
 log_slave_updates=ON
 
-transaction_write_set_extraction=XXHASH64
+#transaction_write_set_extraction=XXHASH64
 loose-group_replication_bootstrap_group=OFF
 loose-group_replication_start_on_boot=OFF
 loose-group_replication_group_name="b0e3a840-0c38-4cb3-aefb-82f1a2b9b32d"
@@ -144,6 +144,8 @@ pid-file=/usr/local/mysql8/mysql8.pid
 ```sql
 --110 机器上执行
 
+./mysql -uroot --socket=/usr/local/mysql8/data/mysql.sock -p
+
 CREATE USER 'replication_user'@'192.168.80.%' IDENTIFIED BY 'replication_pass';
 
 GRANT REPLICATION SLAVE ON *.* TO 'replication_user'@'192.168.80.%';
@@ -154,28 +156,85 @@ install plugin group_replication soname 'group_replication.so';
 show plugins;
 
 set sql_log_bin=0;
-change master to master_user='replication_user',master_password='replication_pass' for channel 'group_replication_recovery';
+CHANGE REPLICATION SOURCE TO SOURCE_USER='replication_user', SOURCE_PASSWORD='replication_pass' FOR CHANNEL 'group_replication_recovery';
 set sql_log_bin=1;
 
 set global group_replication_bootstrap_group=on;
 start group_replication;
 set global group_replication_bootstrap_group=off;
 
-select * from performance_schema.replication_group_members;
+select * from performance_schema.replication_group_members\G;
 
 --111/112分别执行
 install plugin group_replication soname 'group_replication.so';
 
-change master to master_user='replication_user',master_password='replication_pass' for channel 'group_replication_recovery';
-
-set global group_replication_allow_local_disjoint_gtids_join=ON;
+CHANGE REPLICATION SOURCE TO SOURCE_USER='replication_user', SOURCE_PASSWORD='replication_pass' FOR CHANNEL 'group_replication_recovery';
 
 start group_replication;
+
 
 --查看主库名称
 show status like 'group_replication_primary_member';
 --查看只读情况
 show variables like '%read_on%';
+
+SHOW VARIABLES LIKE '%gtid%';
+
+SHOW VARIABLES LIKE '%group%replication%';
+
+-- 查看二进制日志状态（替代 SHOW MASTER STATUS）
+SHOW BINARY LOG STATUS;
+
+-- 查看所有二进制日志
+SHOW BINARY LOGS;
+
+-- 查看作为主库的复制状态
+SHOW REPLICAS;
+
+-- 查看作为从库的复制状态
+SHOW REPLICA STATUS\G;
+
+-- 查看组成员状态
+SELECT * FROM performance_schema.replication_group_members\G
+
+-- 查看组成员统计信息
+SELECT * FROM performance_schema.replication_group_member_stats\G
+
+-- 查看连接状态
+SELECT * FROM performance_schema.replication_connection_status\G
+
+
+如果从库状态不正确请执行以下命令:
+
+-- 1. 停止 Group Replication
+STOP GROUP_REPLICATION;
+
+-- 2. 重置复制状态
+RESET REPLICA ALL;
+
+-- 3. 清理二进制日志
+PURGE BINARY LOGS BEFORE NOW();
+
+-- 4. 检查当前 GTID 状态
+SELECT @@global.gtid_executed;
+SELECT @@global.gtid_purged;
+
+-- 5. 如果需要，清空 GTID_PURGED
+SET GLOBAL gtid_purged='';
+
+-- 6. 设置正确的 GTID 集合（需要从主节点获取正确的值）
+SET GLOBAL gtid_purged='[从主节点获取的完整GTID集合]';  #在节点执行 SELECT @@global.gtid_executed;
+SET GLOBAL gtid_purged='754d27be-8258-11f0-a5e6-525400b26eb7:1-4';
+
+-- 7. 重新配置复制源
+CHANGE REPLICATION SOURCE TO SOURCE_USER='replication_user', SOURCE_PASSWORD='replication_pass' FOR CHANNEL 'group_replication_recovery';
+
+-- 8. 启动 Group Replication
+START GROUP_REPLICATION;
+
+如果以上解决不了问题 建议删除data目录 直接从主库搞个过来. 如果生产环境可以用tx工具 你懂得.  记得删除 data下的auto.cnf   rm -r auto.cnf
+
+
 ```
 
 
