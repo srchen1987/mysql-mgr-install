@@ -143,8 +143,13 @@ pid-file=/usr/local/mysql8/mysql8.pid
 
 ```sql
 --110 机器上执行
-grant replication slave on *.* to 'replication_user'@'192.168.80.%' identified by 'replication_pass';
-flush privileges; 
+
+CREATE USER 'replication_user'@'192.168.80.%' IDENTIFIED BY 'replication_pass';
+
+GRANT REPLICATION SLAVE ON *.* TO 'replication_user'@'192.168.80.%';
+
+flush privileges;
+
 install plugin group_replication soname 'group_replication.so';
 show plugins;
 
