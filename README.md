@@ -43,7 +43,7 @@ port=3306
 socket=/usr/local/mysql8/data/mysql.sock
 gtid-mode=on
 enforce-gtid-consistency=true
-log_bin=/usr/local/mysql8/log-bin
+log_bin=/usr/local/mysql8/data/log-bin
 binlog_format=row
 binlog_checksum=NONE
 skip-name-resolve
@@ -76,7 +76,7 @@ port=3306
 socket=/usr/local/mysql8/data/mysql.sock
 gtid-mode=on
 enforce-gtid-consistency=true
-log_bin=/usr/local/mysql8/log-bin
+log_bin=/usr/local/mysql8/data/log-bin
 binlog_format=row
 binlog_checksum=NONE
 skip-name-resolve
@@ -109,7 +109,7 @@ port=3306
 socket=/usr/local/mysql8/data/mysql.sock
 gtid-mode=on
 enforce-gtid-consistency=true
-log_bin=/usr/local/mysql8/log-bin
+log_bin=/usr/local/mysql8/data/log-bin
 binlog_format=row
 binlog_checksum=NONE
 skip-name-resolve
