@@ -48,8 +48,8 @@ log_bin=/usr/local/mysql8/data/log-bin
 binlog_format=row
 binlog_checksum=NONE
 skip-name-resolve
-master_info_repository=TABLE
-relay_log_info_repository=TABLE
+#master_info_repository=TABLE
+#relay_log_info_repository=TABLE
 log_slave_updates=ON
 
 transaction_write_set_extraction=XXHASH64
@@ -81,8 +81,8 @@ log_bin=/usr/local/mysql8/data/log-bin
 binlog_format=row
 binlog_checksum=NONE
 skip-name-resolve
-master_info_repository=TABLE
-relay_log_info_repository=TABLE
+#master_info_repository=TABLE
+#relay_log_info_repository=TABLE
 log_slave_updates=ON
 
 transaction_write_set_extraction=XXHASH64
@@ -114,8 +114,8 @@ log_bin=/usr/local/mysql8/data/log-bin
 binlog_format=row
 binlog_checksum=NONE
 skip-name-resolve
-master_info_repository=TABLE
-relay_log_info_repository=TABLE
+#master_info_repository=TABLE
+#relay_log_info_repository=TABLE
 log_slave_updates=ON
 
 transaction_write_set_extraction=XXHASH64
