@@ -5,9 +5,8 @@
 
 例如:
 ```shell
-transaction_write_set_extraction=OFF
-# 或者
-transaction_write_set_extraction=MURMUR32
+#注释掉此配置
+#transaction_write_set_extraction=XXHASH64
 ```
 
 ## 简介
