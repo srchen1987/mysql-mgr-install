@@ -36,14 +36,14 @@ mysql1的my.cnf
 ```bash
 [mysqld]
 user=mysql
-basedir=/usr/local/mysq8
-datadir=/usr/local/mysq8/data
+basedir=/usr/local/mysql8
+datadir=/usr/local/mysql8/data
 server_id=110
 port=3306
-socket=/usr/local/mysq8/data/mysql.sock
+socket=/usr/local/mysql8/data/mysql.sock
 gtid-mode=on
 enforce-gtid-consistency=true
-log_bin=/usr/local/mysq8/log-bin
+log_bin=/usr/local/mysql8/log-bin
 binlog_format=row
 binlog_checksum=NONE
 skip-name-resolve
@@ -59,8 +59,8 @@ loose-group_replication_local_address= "192.168.80.110:33061"
 loose-group_replication_group_seeds= "192.168.80.110:33061,192.168.80.111:33061,192.168.80.112:33061"
 loose-group_group_replication_single_primary_mode = ON;
 [mysqld_safe]
-log-error=/usr/local/mysq8/log/mysql_err.log
-pid-file=/usr/local/mysq8/mysql8.pid
+log-error=/usr/local/mysql8/log/mysql_err.log
+pid-file=/usr/local/mysql8/mysql8.pid
 
 ```
 
@@ -69,14 +69,14 @@ Mysql2的my.cnf
 ```bash
 [mysqld]
 user=mysql
-basedir=/usr/local/mysq8
-datadir=/usr/local/mysq8/data
+basedir=/usr/local/mysql8
+datadir=/usr/local/mysql8/data
 server_id=111
 port=3306
-socket=/usr/local/mysq8/data/mysql.sock
+socket=/usr/local/mysql8/data/mysql.sock
 gtid-mode=on
 enforce-gtid-consistency=true
-log_bin=/usr/local/mysq8/log-bin
+log_bin=/usr/local/mysql8/log-bin
 binlog_format=row
 binlog_checksum=NONE
 skip-name-resolve
@@ -92,8 +92,8 @@ loose-group_replication_local_address= "192.168.80.111:33061"
 loose-group_replication_group_seeds= "192.168.80.110:33061,192.168.80.111:33061,192.168.80.112:33061"
 loose-group_group_replication_single_primary_mode = ON;
 [mysqld_safe]
-log-error=/usr/local/mysq8/log/mysql_err.log
-pid-file=/usr/local/mysq8/mysql8.pid
+log-error=/usr/local/mysql8/log/mysql_err.log
+pid-file=/usr/local/mysql8/mysql8.pid
 
 ```
 
@@ -102,14 +102,14 @@ Mysql3的my.cnf
 ```bash
 [mysqld]
 user=mysql
-basedir=/usr/local/mysq8
-datadir=/usr/local/mysq8/data
+basedir=/usr/local/mysql8
+datadir=/usr/local/mysql8/data
 server_id=112
 port=3306
-socket=/usr/local/mysq8/data/mysql.sock
+socket=/usr/local/mysql8/data/mysql.sock
 gtid-mode=on
 enforce-gtid-consistency=true
-log_bin=/usr/local/mysq8/log-bin
+log_bin=/usr/local/mysql8/log-bin
 binlog_format=row
 binlog_checksum=NONE
 skip-name-resolve
@@ -125,8 +125,8 @@ loose-group_replication_local_address= "192.168.80.111:33061"
 loose-group_replication_group_seeds= "192.168.80.110:33061,192.168.80.111:33061,192.168.80.112:33061"
 loose-group_group_replication_single_primary_mode = ON;
 [mysqld_safe]
-log-error=/usr/local/mysq8/log/mysql_err.log
-pid-file=/usr/local/mysq8/mysql8.pid
+log-error=/usr/local/mysql8/log/mysql_err.log
+pid-file=/usr/local/mysql8/mysql8.pid
 
 ```
 
