@@ -3,6 +3,13 @@
 ## mysql版本
 注意:这里采用的是mysql8.0.x  如果是 8.4.x或9.x请参考官方文档调整参数.
 
+例如:
+```shell
+transaction_write_set_extraction=OFF
+# 或者
+transaction_write_set_extraction=MURMUR32
+```
+
 ## 简介
 
 MGR是mysql官方推荐的高可用集群方案,支持单主或多主模式，可随时切换，最少3台机器才能实现高可用方案,少于3台无法实现,会导致脑裂，无法提供服务.
