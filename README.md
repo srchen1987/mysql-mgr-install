@@ -1,4 +1,4 @@
-# 基于mgr搭建高可用方案
+# 基于mgr搭建mysql高可用方案
 
 ## 简介
 
@@ -355,11 +355,11 @@ DELIMITER ;
 
 ```
 
-#### 创建监控与proxysql帐号
+#### 创建监控与proxysql账号
 
 在master(110)中执行以下sql
 
- 创建监控帐号
+ 创建监控账号
 
 ```sql
 CREATE USER 'monitor'@'%' IDENTIFIED BY 'monitor';
@@ -373,7 +373,7 @@ GRANT REPLICATION CLIENT ON *.* TO 'monitor'@'%';
 FLUSH PRIVILEGES;
 ```
 
- 创建proxysql帐号
+ 创建proxysql账号
 
 ```sql
 CREATE USER 'proxysql'@'%' IDENTIFIED BY 'proxysql';
@@ -385,12 +385,12 @@ GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, ALTER ON *.* TO 'prox
 FLUSH PRIVILEGES;
 ```
 
-#### 验证视图与帐号是否创建
+#### 验证视图与账号是否创建
 
 分别在 110 111 112 上执行 看看视图同步创建没有
 SELECT * FROM sys.gr_member_routing_candidate_status;
 
-另外查询下mysql的用户表看看创建的帐号信息是否同步
+另外查询下mysql的用户表看看创建的账号信息是否同步
 
 #### 设置proxysql
 
@@ -416,14 +416,14 @@ insert into mysql_servers(hostgroup_id,hostname,port,weight,max_connections,max_
 insert into mysql_servers(hostgroup_id,hostname,port,weight,max_connections,max_replication_lag,comment) values (10,'192.168.80.112',3306,1,3000,10,'mysql3');
 ```
 
-设置监控者帐号密码(上面在mysql的master上有过创建的)
+设置监控者账号密码(上面在mysql的master上有过创建的)
 
 ```sql
 set mysql-monitor_username='monitor';
 set mysql-monitor_password='monitor';
 ```
 
-添加访问帐号
+添加访问账号
 
 ```sql
 insert into mysql_users(username,password,active,default_hostgroup,transaction_persistent)values('proxysql','proxysql',1,10,1);
@@ -608,7 +608,7 @@ mysql> select * from performance_schema.replication_group_members;
 
 ```
 
-## 一些常用命令
+#### 一些常用命令
 
 系统模式中存在哪些函数
 
