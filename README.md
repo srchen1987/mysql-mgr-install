@@ -1,6 +1,24 @@
 # 基于mgr搭建高可用方案
 
-## mysql版本
+## 简介
+
+MGR是mysql官方推荐的高可用集群方案,通过一个分布式共识协议（如Paxos 的变种）,将集群内的节点组成一个复制组,事务提交前，需要经过多数节点进行决议和验证，通过后才能提交，实现了全局的数据一致性.
+
+MGR的组复制对比同步、半同步、增强半同步、异步四种模式的优势请自己脑补.
+
+MGR是mysql官方推荐的高可用方案,早期mha很多大公司都在用也不错后来停止更新了(我猜测是mysql被收购之后增新料太快,坐作者跟不上节奏,再加上推出了MGR这种MHA存在的价值就不大了).
+
+MGR支持单主或多主模式，可随时切换，最少3台机器才能实现高可用方案,少于3台无法实现,会导致脑裂，无法提供服务.
+
+允许故障数量
+
+3台允许挂1台,5台允许挂2台,7台允许挂3台以此类推.
+
+头脑风暴下: mysql被oracle收购之后mysql作者又去搞mariadb. oracle真该多出点钱留住他,他也不该走舍弃自己的孩子. 不如一起合作重构下mysql,必定mysql代码有很多瑕疵和bug.比如拿比较火的rust语言开发一套全新的mysql.改下开源协议像redis那种不被云厂商白嫖收些抽层也好.针对个人和企业本地化部署的完全开源免费.
+
+## 准备软件
+
+### mysql版本
 
 注意:这里采用的是mysql8.4.x 如果是8.0.x或9.x请参考官方文档调整参数.
 
@@ -11,19 +29,15 @@
 #transaction_write_set_extraction=XXHASH64
 ```
 
-## 简介
+### proxysql版本
 
-MGR是mysql官方推荐的高可用集群方案,支持单主或多主模式，可随时切换，最少3台机器才能实现高可用方案,少于3台无法实现,会导致脑裂，无法提供服务.
-
-允许故障数量
-
-3台允许挂1台,5台允许挂2台,7台允许挂3台以此类推.
+目前最新版是v3.0.2
 
 ## 准备工作
 
-### 准备3台主机,并安装MySQL
+### 准备主机,并安装MySQL
 
-1、四台机器 192.168.80.110,192.168.80.111,192.168.80.112,192.168.80.113
+1、四台机器(我本机是fedora42 太新了 通过kvm安装了4台 fedora41-server版)ip分别为 192.168.80.110,192.168.80.111,192.168.80.112,192.168.80.113
 
 设置hosts
 
@@ -148,7 +162,7 @@ pid-file=/usr/local/mysql8/mysql8.pid
 
 更改完配置文件记得service mysqld restart 重启mysql
 
-#### 主库开通复制账户主从都安装plugins并启动
+### 主库开通复制账户并安装plugins并启动
 
 ```sql
 --110 机器上执行
@@ -172,7 +186,6 @@ set global group_replication_bootstrap_group=on;
 start group_replication;
 set global group_replication_bootstrap_group=off;
 
-select * from performance_schema.replication_group_members\G;
 
 --111/112分别执行
 install plugin group_replication soname 'group_replication.so';
@@ -180,41 +193,6 @@ install plugin group_replication soname 'group_replication.so';
 CHANGE REPLICATION SOURCE TO SOURCE_USER='replication_user', SOURCE_PASSWORD='replication_pass' FOR CHANNEL 'group_replication_recovery';
 
 start group_replication;
-
-
---查看主库名称
-show status like 'group_replication_primary_member';
---查看只读情况
-show variables like '%read_on%';
-
-SHOW VARIABLES LIKE '%gtid%';
-
-SHOW VARIABLES LIKE '%group%replication%';
-
--- 查看二进制日志状态（替代 SHOW MASTER STATUS）
-SHOW BINARY LOG STATUS;
-
--- 查看所有二进制日志
-SHOW BINARY LOGS;
-
--- 查看作为主库的复制状态
-SHOW REPLICAS;
-
--- 查看作为从库的复制状态
-SHOW REPLICA STATUS\G;
-
--- 查看组成员状态
-SELECT * FROM performance_schema.replication_group_members\G
-
---查看当前机器的server_uuid
-SELECT @@global.server_uuid;
-
--- 查看组成员统计信息
-SELECT * FROM performance_schema.replication_group_member_stats\G
-
--- 查看连接状态
-SELECT * FROM performance_schema.replication_connection_status\G
-
 
 如果从库状态不正确请执行以下命令:
 
@@ -236,7 +214,6 @@ SET GLOBAL gtid_purged='';
 
 -- 6. 设置正确的 GTID 集合（需要从主节点获取正确的值）
 SET GLOBAL gtid_purged='[从主节点获取的完整GTID集合]';  #在节点执行 SELECT @@global.gtid_executed;
-SET GLOBAL gtid_purged='754d27be-8258-11f0-a5e6-525400b26eb7:1-4';
 
 -- 7. 重新配置复制源
 CHANGE REPLICATION SOURCE TO SOURCE_USER='replication_user', SOURCE_PASSWORD='replication_pass' FOR CHANNEL 'group_replication_recovery';
@@ -253,13 +230,13 @@ START GROUP_REPLICATION;
 
 ## MGR读写分离与故障转移
 
-借助proxysql来实现读写分离更充分的利用数据库读库资源, 当然中间件来做读写分离稍有些性能损耗(网络传输可以忽略),还有单点问题 这个需要做高可用vip漂移.推荐参考 dawdler的实现方式(<https://github.com/srchen1987/dawdler-series>)
+借助proxysql来实现读写分离更充分的利用数据库读库资源, 当然中间件来做读写分离稍有些性能损耗(网络传输可以忽略),还有单点问题 这个需要做高可用vip漂移.推荐参考 dawdler的实现方式[https://github.com/srchen1987/dawdler-series/tree/master/dawdler/dawdler-db-plug/dawdler-db-core#4-%E6%95%B0%E6%8D%AE%E6%BA%90%E8%A7%84%E5%88%99%E9%85%8D%E7%BD%AE](https://github.com/srchen1987/dawdler-series/tree/master/dawdler/dawdler-db-plug/dawdler-db-core#4-%E6%95%B0%E6%8D%AE%E6%BA%90%E8%A7%84%E5%88%99%E9%85%8D%E7%BD%AE)
 
 ### proxysql 安装
 
-在113上用root用户 安装 yum localinstall -y proxy-2.0.16-1-centos7.x86_64.rpm
+在113上用root用户 安装 yum localinstall -y proxysql-3.0.2-1-fedora41.x86_64.rpm
 
-如果没有 rpm 请去<https://github.com/sysown/proxysql/releases/tag/v2.0.16> 官方下载
+如果没有 rpm 请去<[https://github.com/sysown/proxysql/releases/tag/v3.0.2](https://github.com/sysown/proxysql/releases/tag/v3.0.2)> 官方下载
 
 启动 systemctl start proxysql
 
@@ -269,7 +246,7 @@ START GROUP_REPLICATION;
 
 6033 proxsql对外服务端口
 
-### master(110)中为proxysql创建视图
+#### master(110)中为proxysql创建视图
 
 ```sql
 --为proxysql提供判断节点状态的视图
@@ -340,13 +317,6 @@ performance_schema.replication_group_members WHERE MEMBER_STATE != 'ONLINE') >=
 'YES', 'NO' ) FROM performance_schema.replication_group_members JOIN
 performance_schema.replication_group_member_stats USING(member_id));
 END$$
---这个是我之前做的视图,目前不可用了  很多函数不存在了比如 gr_member_in_primary_partition 用下面的语句替换
---CREATE VIEW gr_member_routing_candidate_status AS SELECT
---sys.gr_member_in_primary_partition() as viable_candidate,
---IF( (SELECT (SELECT GROUP_CONCAT(variable_value) FROM
---performance_schema.global_variables WHERE variable_name IN ('read_only',
---'super_read_only')) != 'OFF,OFF'), 'YES', 'NO') as read_only,
---sys.gr_applier_queue_length() as transactions_behind, Count_Transactions_in_queue as 'transactions_to_cert' from performance_schema.replication_group_member_stats;$$
 
 CREATE VIEW gr_member_routing_candidate_status AS 
 SELECT
@@ -508,13 +478,13 @@ insert into mysql_query_rules(rule_id,active,match_digest,destination_hostgroup,
 查看MGR配置信息
 
 ```sql
-select * from mysql_group_replication_hostgroups\G
+select * from mysql_group_replication_hostgroups\G；
 ```
 
 确认链接信息和ping信息,如果以上最后一列为NULL 则正常 否则需要处理 具体看 mysql错误日志和proxysql的错误日志
 
 ```sql
-SELECT * FROM monitor.mysql_server_connect_log ORDER BY time_start_us ;
+SELECT * FROM monitor.mysql_server_connect_log ORDER BY time_start_us;
 
 SELECT * FROM monitor.mysql_server_ping_log ORDER BY time_start_us;
 ```
@@ -541,28 +511,71 @@ for i in `seq 1 10`; do mysql -uproxysql -pproxysql -h192.168.80.113  -P6033 -e 
 for i in `seq 1 10`; do mysql -uproxysql -pproxysql -h192.168.80.113 -P6033 -e 'SELECT @@server_id for update'; done
 ```
 
-##### 故障转移测试
+### 故障转移测试
+
+在主节点(110)执行以下命令
+
+```sql
+SELECT * FROM performance_schema.replication_group_members;
+```
+
+可以看到返回的结果如下：
+
+```shell
+mysql> select * from performance_schema.replication_group_members;
++---------------------------+--------------------------------------+-------------+-------------+--------------+-------------+----------------+----------------------------+
+| CHANNEL_NAME              | MEMBER_ID                            | MEMBER_HOST | MEMBER_PORT | MEMBER_STATE | MEMBER_ROLE | MEMBER_VERSION | MEMBER_COMMUNICATION_STACK |
++---------------------------+--------------------------------------+-------------+-------------+--------------+-------------+----------------+----------------------------+
+| group_replication_applier | 754d27be-8258-11f0-a5e6-525400b26eb7 | mgr-node1   |        3306 | ONLINE       | PRIMARY   | 8.4.3          | XCom                       |
+| group_replication_applier | d0a51766-8272-11f0-8b37-52540069f9d5 | mgr-node3   |        3306 | ONLINE       | SECONDARY   | 8.4.3          | XCom                       |
+| group_replication_applier | e11c57cb-826e-11f0-867b-52540097b806 | mgr-node2   |        3306 | ONLINE       | SECONDARY   | 8.4.3          | XCom                       |
++---------------------------+--------------------------------------+-------------+-------------+--------------+-------------+----------------+----------------------------+
+
+```
 
 主库停机(110) service mysqld stop
 
-创建数据库测试
+通过任意一台mysql节点的client连接到proxysql节点(113)创建数据库测试
 
 ```bash
-mysql -uproxysql -pproxysql -h192.168.80.113 -P6033 -e 'create database mydemo;'
+# mysql -uproxysql -pproxysql -h192.168.80.113 -P6033 -e 'create database mydemo;'
 ```
 
-### slave1,slave2查看结果
+经过以上步骤,依旧可以创建数据库.
+
+在主库停机后,从库(111,112)上执行以下命令查看当前运行服务器列状态.
+
+```sql
+SELECT * FROM performance_schema.replication_group_members;
+```
+
+可以看到从库(111,112)的运行状态为ONLINE,mgr-node1(110)不见了,同时mgr-node3的MEMBER_ROLE为PRIMARY.
+
+```shell
+mysql> select * from performance_schema.replication_group_members;
++---------------------------+--------------------------------------+-------------+-------------+--------------+-------------+----------------+----------------------------+
+| CHANNEL_NAME              | MEMBER_ID                            | MEMBER_HOST | MEMBER_PORT | MEMBER_STATE | MEMBER_ROLE | MEMBER_VERSION | MEMBER_COMMUNICATION_STACK |
++---------------------------+--------------------------------------+-------------+-------------+--------------+-------------+----------------+----------------------------+
+| group_replication_applier | d0a51766-8272-11f0-8b37-52540069f9d5 | mgr-node3   |        3306 | ONLINE       | PRIMARY     | 8.4.3          | XCom                       |
+| group_replication_applier | e11c57cb-826e-11f0-867b-52540097b806 | mgr-node2   |        3306 | ONLINE       | SECONDARY   | 8.4.3          | XCom                       |
++---------------------------+--------------------------------------+-------------+-------------+--------------+-------------+----------------+----------------------------+
+
+```
+
+#### slave1,slave2查看结果
 
 在从库中执行 (111,112)
 
 show database;
 
-验证下 数据库是否创建了
+验证下 数据库已经创建成功
 
 查看当前运行服务器列状态
 
+这个需要在proxysql上执行,因为没有admin授权其他ip可访问,如果需要授权其他ip可访问,则需要授权.
+
 ```bash
-mysql -uadmin -padmin -P6032 -h192.168.80.113 -e 'select hostgroup_id,hostname,port,status from runtime_mysql_servers;'
+mysql -uadmin -padmin -P6032 -h127.0.0.1 -e 'select hostgroup_id,hostname,port,status from runtime_mysql_servers;'
 ```
 
 重新启动主库(110)
@@ -571,25 +584,31 @@ mysql -uadmin -padmin -P6032 -h192.168.80.113 -e 'select hostgroup_id,hostname,p
 /etc/init.d/mysqld start
 ```
 
-登录主库
-
-执行以下脚本
-
-```bash
-stop group_replication;
-
-change master to master_user='replication_user',master_password='replication_pass' for channel 'group_replication_recovery';
-
-start group_replication;
-```
-
 查看具体目前服务器运行状况
 
 ```bash
-mysql -uadmin -padmin -P6032 -h192.168.80.113 -e 'select hostgroup_id,hostname,port,status from runtime_mysql_servers;'
+mysql -uadmin -padmin -P6032 -h127.0.0.1 -e 'select hostgroup_id,hostname,port,status from runtime_mysql_servers;'
 ```
 
-一些常用命令
+在主库(110)上执行以下命令查看当前运行服务器列状态.
+
+```sql
+SELECT * FROM performance_schema.replication_group_members;
+```
+
+```shell
+mysql> select * from performance_schema.replication_group_members;
++---------------------------+--------------------------------------+-------------+-------------+--------------+-------------+----------------+----------------------------+
+| CHANNEL_NAME              | MEMBER_ID                            | MEMBER_HOST | MEMBER_PORT | MEMBER_STATE | MEMBER_ROLE | MEMBER_VERSION | MEMBER_COMMUNICATION_STACK |
++---------------------------+--------------------------------------+-------------+-------------+--------------+-------------+----------------+----------------------------+
+| group_replication_applier | 754d27be-8258-11f0-a5e6-525400b26eb7 | mgr-node1   |        3306 | ONLINE       | SECONDARY   | 8.4.3          | XCom                       |
+| group_replication_applier | d0a51766-8272-11f0-8b37-52540069f9d5 | mgr-node3   |        3306 | ONLINE       | PRIMARY     | 8.4.3          | XCom                       |
+| group_replication_applier | e11c57cb-826e-11f0-867b-52540097b806 | mgr-node2   |        3306 | ONLINE       | SECONDARY   | 8.4.3          | XCom                       |
++---------------------------+--------------------------------------+-------------+-------------+--------------+-------------+----------------+----------------------------+
+
+```
+
+## 一些常用命令
 
 系统模式中存在哪些函数
 
@@ -602,9 +621,6 @@ proxysql的一些统计
 ```sql
 -- 查看查询摘要统计
 SELECT * FROM stats_mysql_query_digest ORDER BY sum_time DESC LIMIT 10;
-
--- 查看详细的查询日志
-SELECT * FROM stats_mysql_query_digest_reset ORDER BY sum_time DESC LIMIT 10;
 
 -- 查看查询规则匹配情况
 SELECT * FROM stats_mysql_query_rules;
@@ -636,8 +652,79 @@ SELECT * FROM stats_history_mysql_query_digest ORDER BY timestamp DESC LIMIT 20;
 查看所有代理的mysql服务器
 
 ```sql
-
 SELECT * FROM mysql_servers;
+```
+
+查看主库名称
+
+```sql
+show status like 'group_replication_primary_member';
+```
+
+查看只读情况
+
+```sql
+show variables like '%read_on%';
+```
+
+查看mysql的GTID状态
+
+```sql
+SHOW VARIABLES LIKE '%gtid%';
+```
+
+查看mysql的MGR状态
+
+```sql
+SHOW VARIABLES LIKE '%group%replication%';
+```
+
+查看二进制日志状态（替代 SHOW MASTER STATUS）
+
+```sql
+SHOW BINARY LOG STATUS;
+```
+
+查看所有二进制日志
+
+```sql
+SHOW BINARY LOGS;
+```
+
+查看作为主库的复制状态
+
+```sql
+SHOW REPLICAS;
+```
+
+查看作为从库的复制状态
+
+```sql
+SHOW REPLICA STATUS\G;
+```
+
+查看组成员状态
+
+```sql
+SELECT * FROM performance_schema.replication_group_members\G;
+```
+
+查看当前机器的server_uuid
+
+```sql
+SELECT @@global.server_uuid;
+```
+
+查看组成员统计信息
+
+```sql
+SELECT * FROM performance_schema.replication_group_member_stats\G;
+```
+
+查看连接状态
+
+```sql
+SELECT * FROM performance_schema.replication_connection_status\G;
 ```
 
 友情提醒 生产环境下要把proxysql的密码设置复杂些,具体在/etc/proxysql.cnf中,另外各种网络权限也要设置好同步和管理的端口不要暴露在公网.
