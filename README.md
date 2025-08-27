@@ -1,9 +1,11 @@
 # 基于mgr搭建高可用方案
 
 ## mysql版本
+
 注意:这里采用的是mysql8.4.x 如果是8.0.x或9.x请参考官方文档调整参数.
 
 例如:
+
 ```shell
 #注释掉此配置
 #transaction_write_set_extraction=XXHASH64
@@ -19,9 +21,18 @@ MGR是mysql官方推荐的高可用集群方案,支持单主或多主模式，�
 
 ## 准备工作
 
-#### 准备3台主机,并安装MySQL
+### 准备3台主机,并安装MySQL
 
 1、四台机器 192.168.80.110,192.168.80.111,192.168.80.112,192.168.80.113
+
+设置hosts
+
+```shell
+192.168.80.110 mgr-node1
+192.168.80.111 mgr-node2
+192.168.80.112 mgr-node3
+192.168.80.113 proxysql
+```
 
 分别更改 host文件 mysql1 mysql2 mysql3,proxysql  对应上面ip
 
@@ -32,9 +43,7 @@ MGR是mysql官方推荐的高可用集群方案,支持单主或多主模式，�
 | mysql3   | 192.168.80.112 | slave    |
 | proxysql | 192.168.80.113 | proxysql |
 
-
-
-2、下载并安装mysql 参考 https://github.com/srchen1987/mysql_install
+2、下载并安装mysql 参考 <https://github.com/srchen1987/mysql_install>
 
 3、mysql配置
 
@@ -58,7 +67,7 @@ skip-name-resolve
 #relay_log_info_repository=TABLE
 log_slave_updates=ON
 
-transaction_write_set_extraction=XXHASH64
+#transaction_write_set_extraction=XXHASH64
 loose-group_replication_bootstrap_group=OFF
 loose-group_replication_start_on_boot=OFF
 loose-group_replication_group_name="b0e3a840-0c38-4cb3-aefb-82f1a2b9b32d"
@@ -139,7 +148,7 @@ pid-file=/usr/local/mysql8/mysql8.pid
 
 更改完配置文件记得service mysqld restart 重启mysql
 
-####    主库开通复制账户主从都安装plugins并启动
+#### 主库开通复制账户主从都安装plugins并启动
 
 ```sql
 --110 机器上执行
@@ -197,6 +206,9 @@ SHOW REPLICA STATUS\G;
 -- 查看组成员状态
 SELECT * FROM performance_schema.replication_group_members\G
 
+--查看当前机器的server_uuid
+SELECT @@global.server_uuid;
+
 -- 查看组成员统计信息
 SELECT * FROM performance_schema.replication_group_member_stats\G
 
@@ -237,30 +249,27 @@ START GROUP_REPLICATION;
 
 ```
 
-
-
 **注意群组全部启停的情况需要注意顺序, 顺序为 停止顺序: 先停从后停主, 启动顺序先启动主后启动从.**
-
-
 
 ## MGR读写分离与故障转移
 
-借助proxysql来实现读写分离更充分的利用数据库读库资源, 当然中间件来做读写分离稍有些性能损耗(网络传输可以忽略),还有单点问题 这个需要做高可用vip漂移.推荐参考 dawdler的实现方式(https://github.com/srchen1987/dawdler-series)
+借助proxysql来实现读写分离更充分的利用数据库读库资源, 当然中间件来做读写分离稍有些性能损耗(网络传输可以忽略),还有单点问题 这个需要做高可用vip漂移.推荐参考 dawdler的实现方式(<https://github.com/srchen1987/dawdler-series>)
 
-#### proxysql 安装 
-
-
+### proxysql 安装
 
 在113上用root用户 安装 yum localinstall -y proxy-2.0.16-1-centos7.x86_64.rpm
 
-如果没有 rpm 请去https://github.com/sysown/proxysql/releases/tag/v2.0.16 官方下载
+如果没有 rpm 请去<https://github.com/sysown/proxysql/releases/tag/v2.0.16> 官方下载
 
 启动 systemctl start proxysql
 
-#6032 proxsql的管理端口
-#6033 proxsql对外服务端口
+端口说明:
 
-#### master(110)中为proxysql创建视图
+6032 proxsql的管理端口
+
+6033 proxsql对外服务端口
+
+### master(110)中为proxysql创建视图
 
 ```sql
 --为proxysql提供判断节点状态的视图
@@ -331,37 +340,80 @@ performance_schema.replication_group_members WHERE MEMBER_STATE != 'ONLINE') >=
 'YES', 'NO' ) FROM performance_schema.replication_group_members JOIN
 performance_schema.replication_group_member_stats USING(member_id));
 END$$
+--这个是我之前做的视图,目前不可用了  很多函数不存在了比如 gr_member_in_primary_partition 用下面的语句替换
+--CREATE VIEW gr_member_routing_candidate_status AS SELECT
+--sys.gr_member_in_primary_partition() as viable_candidate,
+--IF( (SELECT (SELECT GROUP_CONCAT(variable_value) FROM
+--performance_schema.global_variables WHERE variable_name IN ('read_only',
+--'super_read_only')) != 'OFF,OFF'), 'YES', 'NO') as read_only,
+--sys.gr_applier_queue_length() as transactions_behind, Count_Transactions_in_queue as 'transactions_to_cert' from performance_schema.replication_group_member_stats;$$
 
-CREATE VIEW gr_member_routing_candidate_status AS SELECT
-sys.gr_member_in_primary_partition() as viable_candidate,
-IF( (SELECT (SELECT GROUP_CONCAT(variable_value) FROM
-performance_schema.global_variables WHERE variable_name IN ('read_only',
-'super_read_only')) != 'OFF,OFF'), 'YES', 'NO') as read_only,
-sys.gr_applier_queue_length() as transactions_behind, Count_Transactions_in_queue as 'transactions_to_cert' from performance_schema.replication_group_member_stats;$$
+CREATE VIEW gr_member_routing_candidate_status AS 
+SELECT
+    -- 替换 sys.gr_member_in_primary_partition()
+    IF(
+        rgm.MEMBER_STATE = 'ONLINE' 
+        AND (SELECT COUNT(*) FROM performance_schema.replication_group_members 
+             WHERE MEMBER_STATE != 'ONLINE') = 0,
+        'YES', 
+        'NO'
+    ) AS viable_candidate,
+     
+    -- 保持原有的 read_only 检查
+    IF(
+        (SELECT GROUP_CONCAT(variable_value) 
+         FROM performance_schema.global_variables 
+         WHERE variable_name IN ('read_only', 'super_read_only')) != 'OFF,OFF', 
+        'YES', 
+        'NO'
+    ) AS read_only,
+               
+    -- 替换 sys.gr_applier_queue_length()
+    (SELECT COUNT(*) 
+     FROM performance_schema.replication_applier_status_by_worker 
+     WHERE SERVICE_STATE = 'ON') 
+    AS transactions_behind,
+    
+    -- 保持原有的字段
+    rgms.Count_Transactions_in_queue AS transactions_to_cert
+    
+FROM performance_schema.replication_group_member_stats rgms
+JOIN performance_schema.replication_group_members rgm 
+  ON rgms.MEMBER_ID = rgm.MEMBER_ID$$
 
 DELIMITER ;
 
 ```
 
-
-
 #### 创建监控与proxysql帐号
 
-在master(111)中执行以下sql
+在master(110)中执行以下sql
 
  创建监控帐号
 
 ```sql
-grant select on sys.* to 'monitor'@'%' identified by 'monitor';
+CREATE USER 'monitor'@'%' IDENTIFIED BY 'monitor';
+
+-- 授予必要的监控权限
+GRANT SELECT ON performance_schema.* TO 'monitor'@'%';
+GRANT SELECT ON sys.* TO 'monitor'@'%';
+GRANT REPLICATION CLIENT ON *.* TO 'monitor'@'%';
+
+-- 刷新权限
+FLUSH PRIVILEGES;
 ```
 
  创建proxysql帐号
 
 ```sql
-grant all on *.* to 'proxysql'@'%' identified by 'proxysql';
+CREATE USER 'proxysql'@'%' IDENTIFIED BY 'proxysql';
+
+--为方便操作授权了select和update全部的库和表 根据实际业务调整
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, ALTER ON *.* TO 'proxysql'@'%';
+
+-- 刷新权限
+FLUSH PRIVILEGES;
 ```
-
-
 
 #### 验证视图与帐号是否创建
 
@@ -370,13 +422,18 @@ SELECT * FROM sys.gr_member_routing_candidate_status;
 
 另外查询下mysql的用户表看看创建的帐号信息是否同步
 
-
-
 #### 设置proxysql
 
+proxysql节点(proxysql 113)上安装mysql客户端
+
+```shell
+yum install -y mysql.x86_64
+```
+
+登录proxysql admin管理接口,proxysql的配置在 /etc/proxysql.cnf
+
 ```sql
---proxysql节点(proxysql 113)上登录proxysql admin管理接口 proxysql的配置在 /etc/proxysql.cnf中
-mysql -uadmin -padmin --prompt='proxysql>' -P6032 -h192.168.80.113
+mysql -uadmin -padmin --prompt='proxysql>' -P6032 -h127.0.0.1
 ```
 
 添加节点
@@ -402,24 +459,30 @@ set mysql-monitor_password='monitor';
 insert into mysql_users(username,password,active,default_hostgroup,transaction_persistent)values('proxysql','proxysql',1,10,1);
 ```
 
-
-
 热加载到runtime并将配置持久化存储到硬盘
 
 ```sql
-load mysql servers to runtime;
-save mysql servers to disk;
+-- 刷新所有配置
+LOAD MYSQL USERS TO RUNTIME;
+LOAD MYSQL SERVERS TO RUNTIME;
+LOAD MYSQL QUERY RULES TO RUNTIME;
+LOAD MYSQL VARIABLES TO RUNTIME;
+LOAD ADMIN VARIABLES TO RUNTIME;
+
+-- 保存到磁盘
+SAVE MYSQL USERS TO DISK;
+SAVE MYSQL SERVERS TO DISK;
+SAVE MYSQL QUERY RULES TO DISK;
+SAVE MYSQL VARIABLES TO DISK;
+SAVE ADMIN VARIABLES TO DISK;
+
 ```
-
-
 
 定义组信息
 
 ```sql
 insert into mysql_group_replication_hostgroups(writer_hostgroup,backup_writer_hostgroup,reader_hostgroup,offline_hostgroup,active,max_writers,writer_is_also_reader,max_transactions_behind)  values(10,20,30,40,1,1,0,0);
 ```
-
-
 
 查看链接情况
 
@@ -428,15 +491,11 @@ select * from monitor.mysql_server_connect_log;
 select * from monitor.mysql_server_ping_log;
 ```
 
-
-
 查看服务器目前分组情况
 
 ```sql
 select hostgroup_id,hostname,port,status,weight from mysql_servers;
 ```
-
-
 
 #### proxysql设置读写分离规则
 
@@ -446,15 +505,11 @@ insert into mysql_query_rules(rule_id,active,match_digest,destination_hostgroup,
 insert into mysql_query_rules(rule_id,active,match_digest,destination_hostgroup,apply)values(2,1,'^SELECT',30,1);-- 30为读
 ```
 
-
-
 查看MGR配置信息
 
 ```sql
 select * from mysql_group_replication_hostgroups\G
 ```
-
-
 
 确认链接信息和ping信息,如果以上最后一列为NULL 则正常 否则需要处理 具体看 mysql错误日志和proxysql的错误日志
 
@@ -464,36 +519,27 @@ SELECT * FROM monitor.mysql_server_connect_log ORDER BY time_start_us ;
 SELECT * FROM monitor.mysql_server_ping_log ORDER BY time_start_us;
 ```
 
-
-
 查看各节点分组的信息
 
 ```sql
 select hostgroup_id, hostname, port,status from runtime_mysql_servers;
 ```
 
-
-
 sql测试读写分离
 
 通过循环10次调用看看是否负载均衡 是否走到从库(也称为读库),通过server_id来确认不同机器
 
-
-
 读测试
 
 ```bash
-for i in `seq 1 10`; do mysql -uproxysql -pproxysql -h192.168.80.113 -P6033 -e 'select * from performance_schema.global_variables where variable_name="server_id";' ; done  | grep server
-
+for i in `seq 1 10`; do mysql -uproxysql -pproxysql -h192.168.80.113  -P6033 -e 'SELECT @@server_id'; done
 ```
 
 写测试(模拟写 因为用了 for update 也会走写规则)
 
 ```bash
-for i in `seq 1 10`; do mysql -uproxysql -pproxysql -h192.168.80.113 -P6033 -e 'select * from performance_schema.global_variables where variable_name="server_id" for update;' ; done  | grep server
+for i in `seq 1 10`; do mysql -uproxysql -pproxysql -h192.168.80.113 -P6033 -e 'SELECT @@server_id for update'; done
 ```
-
-
 
 ##### 故障转移测试
 
@@ -505,15 +551,13 @@ for i in `seq 1 10`; do mysql -uproxysql -pproxysql -h192.168.80.113 -P6033 -e '
 mysql -uproxysql -pproxysql -h192.168.80.113 -P6033 -e 'create database mydemo;'
 ```
 
-#slave1,slave2查看结果；
+### slave1,slave2查看结果
 
 在从库中执行 (111,112)
 
-show database; 
+show database;
 
 验证下 数据库是否创建了
-
-
 
 查看当前运行服务器列状态
 
@@ -527,8 +571,6 @@ mysql -uadmin -padmin -P6032 -h192.168.80.113 -e 'select hostgroup_id,hostname,p
 /etc/init.d/mysqld start
 ```
 
-
-
 登录主库
 
 执行以下脚本
@@ -539,8 +581,6 @@ stop group_replication;
 change master to master_user='replication_user',master_password='replication_pass' for channel 'group_replication_recovery';
 
 start group_replication;
-
-
 ```
 
 查看具体目前服务器运行状况
@@ -549,7 +589,55 @@ start group_replication;
 mysql -uadmin -padmin -P6032 -h192.168.80.113 -e 'select hostgroup_id,hostname,port,status from runtime_mysql_servers;'
 ```
 
+一些常用命令
 
+系统模式中存在哪些函数
+
+SHOW FUNCTION STATUS WHERE Db='sys';
+
+proxysql的一些统计
+
+查看查询统计
+
+```sql
+-- 查看查询摘要统计
+SELECT * FROM stats_mysql_query_digest ORDER BY sum_time DESC LIMIT 10;
+
+-- 查看详细的查询日志
+SELECT * FROM stats_mysql_query_digest_reset ORDER BY sum_time DESC LIMIT 10;
+
+-- 查看查询规则匹配情况
+SELECT * FROM stats_mysql_query_rules;
+```
+
+查看连接统计
+
+```sql
+-- 查看连接池统计
+SELECT * FROM stats_mysql_connection_pool;
+
+-- 查看连接统计
+SELECT * FROM stats_mysql_processlist;
+
+-- 查看命令统计
+SELECT * FROM stats_mysql_commands_counters;
+```
+
+实时监控查询
+
+```sql
+-- 实时查看当前查询
+SELECT * FROM stats_mysql_processlist WHERE Info IS NOT NULL;
+
+-- 查看最近的查询（需要启用查询日志）
+SELECT * FROM stats_history_mysql_query_digest ORDER BY timestamp DESC LIMIT 20;
+```
+
+查看所有代理的mysql服务器
+
+```sql
+
+SELECT * FROM mysql_servers;
+```
 
 友情提醒 生产环境下要把proxysql的密码设置复杂些,具体在/etc/proxysql.cnf中,另外各种网络权限也要设置好同步和管理的端口不要暴露在公网.
-
