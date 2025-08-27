@@ -1,4 +1,4 @@
-# 基于mgr搭建mysql高可用方案
+# 基于mgr和proxysql搭建mysql高可用方案
 
 ## 简介
 
