@@ -151,7 +151,7 @@ log_slave_updates=ON
 loose-group_replication_bootstrap_group=OFF
 loose-group_replication_start_on_boot=ON
 loose-group_replication_group_name="b0e3a840-0c38-4cb3-aefb-82f1a2b9b32d"
-group_replication_local_address= "192.168.80.111:33061"
+group_replication_local_address= "192.168.80.112:33061"
 group_replication_group_seeds= "192.168.80.110:33061,192.168.80.111:33061,192.168.80.112:33061"
 loose-group_group_replication_single_primary_mode = ON;
 [mysqld_safe]
