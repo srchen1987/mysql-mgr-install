@@ -6,7 +6,7 @@ MGR是mysql官方推荐的高可用集群方案,通过一个分布式共识协�
 
 MGR的组复制对比同步、半同步、增强半同步、异步四种模式的优势请自己脑补.
 
-MGR是mysql官方推荐的高可用方案,早期mha很多大公司都在用也不错后来停止更新了(我猜测是mysql被收购之后增新料太快,坐作者跟不上节奏,再加上推出了MGR这种MHA存在的价值就不大了).
+MGR是mysql官方推荐的高可用方案,早期mha很多大公司都在用也不错后来停止更新了(我猜测是mysql被收购之后增新料太快,作者跟不上节奏,再加上推出了MGR这种MHA存在的价值就不大了).
 
 MGR支持单主或多主模式，可随时切换，最少3台机器才能实现高可用方案,少于3台无法实现,会导致脑裂，无法提供服务.
 
@@ -445,7 +445,14 @@ SAVE MYSQL SERVERS TO DISK;
 SAVE MYSQL QUERY RULES TO DISK;
 SAVE MYSQL VARIABLES TO DISK;
 SAVE ADMIN VARIABLES TO DISK;
+```
 
+更改mysql版本 默认是5.5.30
+
+```sql
+update global_variables set variable_value="8.4.3" where variable_name="mysql-server_version";
+LOAD MYSQL VARIABLES TO RUN;
+SAVE MYSQL VARIABLES TO DISK;
 ```
 
 定义组信息
